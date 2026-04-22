@@ -169,23 +169,23 @@ describe('getStallRisk', () => {
   });
 
   it('returns "moderate" at 70–85% of stall angle', () => {
-    expect(getStallRisk(naca2412, 12)).toBe('moderate'); // 12/16 = 75%
+    expect(getStallRisk(naca2412, 12)).toBe('moderate'); // 12/15 = 80%
   });
 
   it('returns "high" at 85–100% of stall angle', () => {
-    expect(getStallRisk(naca2412, 14)).toBe('high'); // 14/16 = 87.5%
+    expect(getStallRisk(naca2412, 14)).toBe('high'); // 14/15 = 93%
   });
 
   it('returns "stalled" at or beyond stall angle', () => {
-    expect(getStallRisk(naca2412, 16)).toBe('stalled');
+    expect(getStallRisk(naca2412, 15)).toBe('stalled');
     expect(getStallRisk(naca2412, 20)).toBe('stalled');
   });
 
   it('S1223 stalls earlier than NACA 2412 at the same AOA', () => {
     const s1223 = getAirfoilById('S1223');
-    // aoa=12: S1223 ratio=1.2 → stalled, naca2412 ratio=0.75 → moderate
-    expect(getStallRisk(s1223, 12)).toBe('stalled');
-    expect(getStallRisk(naca2412, 12)).toBe('moderate');
+    // aoa=13: S1223 ratio=1.0 → stalled, naca2412 ratio=0.867 → high
+    expect(getStallRisk(s1223, 13)).toBe('stalled');
+    expect(getStallRisk(naca2412, 13)).toBe('high');
   });
 });
 

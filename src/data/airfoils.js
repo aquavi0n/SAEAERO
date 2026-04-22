@@ -5,8 +5,8 @@ export const AIRFOILS = [
   {
     id: 'NACA_2412',
     name: 'NACA 2412',
-    CL_max: 1.5,
-    stallAngle: 16,
+    CL_max: 1.45,
+    stallAngle: 15,
     warningText: null,
     constructionNote: 'Classic training airfoil. Easy to build accurately with flat bottom variant.',
   },
@@ -21,8 +21,8 @@ export const AIRFOILS = [
   {
     id: 'NACA_0012',
     name: 'NACA 0012',
-    CL_max: 1.35,
-    stallAngle: 15,
+    CL_max: 1.20,
+    stallAngle: 13,
     warningText: null,
     constructionNote: 'Symmetric — suitable for tail surfaces. Not recommended for main wing.',
   },
@@ -46,8 +46,8 @@ export const AIRFOILS = [
     id: 'S1223',
     name: 'Selig S1223',
     CL_max: 2.1,
-    stallAngle: 10,
-    warningText: 'Very abrupt leading-edge stall at low Re. Requires careful AOA management.',
+    stallAngle: 13,
+    warningText: 'Very abrupt leading-edge stall at low Re. Requires careful AOA management and adequate washout.',
     constructionNote: 'Highest CL_max in database. Thin leading edge is fragile — reinforce with tape.',
   },
 ];

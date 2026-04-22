@@ -13,10 +13,13 @@ export const TAIL_CONFIGS = [
   {
     id: 'T_TAIL',
     name: 'T-Tail',
-    modifier: 1.05, // slight efficiency gain from endplate effect
+    // Endplate effect boosts vertical tail efficiency ~25%, but has negligible direct impact
+    // on horizontal tail V_ht. Modifier reflects slightly higher dynamic pressure at the tail
+    // from being above the fuselage wake. Keep close to 1.0.
+    modifier: 1.01,
     requiresDihedral: false,
     warnings: [
-      'T-tail is susceptible to deep stall: at high AOA the wing wake blankets the horizontal stabilizer, causing locked-in stall with no pitch recovery.',
+      'T-tail at high AOA: the wing wake can partially blanket the horizontal stabilizer, reducing pitch-down authority. This raises the risk of pitch-up divergence and tail flutter. For SAE Aero aircraft the risk is manageable but requires conservative CG placement (SM ≥ 8%) and flight testing at incrementally increasing AOA.',
     ],
   },
   {
