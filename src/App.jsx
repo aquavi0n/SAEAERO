@@ -4,6 +4,17 @@ import ResultsDisplay from './components/ResultsDisplay.jsx';
 import { computeFullReport } from './logic/fullCalcs.js';
 
 const ACCESS_CODE = '4694270727';
+const SESSION_KEY = 'sae_unlocked_until';
+const SESSION_DURATION = 60 * 60 * 1000; // 1 hour
+
+function isSessionValid() {
+  const expiry = localStorage.getItem(SESSION_KEY);
+  return expiry && Date.now() < Number(expiry);
+}
+
+function saveSession() {
+  localStorage.setItem(SESSION_KEY, Date.now() + SESSION_DURATION);
+}
 
 function LockScreen({ onUnlock }) {
   const [input, setInput] = useState('');
@@ -12,6 +23,7 @@ function LockScreen({ onUnlock }) {
   function handleSubmit(e) {
     e.preventDefault();
     if (input === ACCESS_CODE) {
+      saveSession();
       onUnlock();
     } else {
       setFailed(true);
@@ -47,7 +59,7 @@ function LockScreen({ onUnlock }) {
 }
 
 export default function App() {
-  const [unlocked, setUnlocked] = useState(false);
+  const [unlocked, setUnlocked] = useState(isSessionValid);
   const [results, setResults] = useState(null);
   const [error,   setError]   = useState(null);
 
