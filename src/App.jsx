@@ -3,7 +3,7 @@ import InputForm from './components/InputForm.jsx';
 import ResultsDisplay from './components/ResultsDisplay.jsx';
 import { computeFullReport } from './logic/fullCalcs.js';
 
-const ACCESS_CODE = '4694270727';
+const ACCESS_CODE = 'dbf123';
 const SESSION_KEY = 'sae_unlocked_until';
 const SESSION_DURATION = 60 * 60 * 1000; // 1 hour
 
