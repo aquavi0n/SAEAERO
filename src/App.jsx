@@ -65,9 +65,9 @@ export default function App() {
 
   if (!unlocked) return <LockScreen onUnlock={() => setUnlocked(true)} />;
 
-  function handleCalculate(airfoilId, wingConfigId, tailId, payloadKg) {
+  function handleCalculate(airfoilId, wingConfigId, tailId, wingspanM) {
     try {
-      setResults(computeFullReport(airfoilId, wingConfigId, tailId, payloadKg));
+      setResults(computeFullReport(airfoilId, wingConfigId, tailId, wingspanM));
       setError(null);
     } catch (e) {
       setError(e.message);
@@ -84,7 +84,7 @@ export default function App() {
             <div className="mb-8">
               <h1 className="text-2xl font-bold text-white tracking-tight">SAE Aero Calculator</h1>
               <p className="text-sm text-gray-400 mt-1">
-                Full aerodynamic sizing from airfoil, payload, and tail config. Max wingspan: 10 m.
+                Set your wingspan — get payload capacity + full aircraft sizing. 15 ft combined span limit.
               </p>
             </div>
 

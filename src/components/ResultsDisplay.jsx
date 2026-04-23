@@ -72,7 +72,7 @@ export default function ResultsDisplay({ results: r, onBack }) {
         <div>
           <h1 className="text-xl font-bold text-white">Aircraft Design Report</h1>
           <p className="text-sm text-gray-500 mt-0.5">
-            {r.inputs.airfoilName} &middot; {r.inputs.wingConfigName} &middot; {r.inputs.tailTypeName} &middot; {r.inputs.payloadKg} kg payload
+            {r.inputs.airfoilName} &middot; {r.inputs.wingConfigName} &middot; {r.inputs.tailTypeName} &middot; {r.inputs.wingspan_m} m span
           </p>
         </div>
         <div className="flex gap-2 shrink-0">
@@ -96,26 +96,30 @@ export default function ResultsDisplay({ results: r, onBack }) {
       {/* ── QUICK SUMMARY ──────────────────────────────────────────────── */}
       <Section title="Quick Summary">
         <div className="grid grid-cols-2 gap-x-8">
+          <Row label="Payload Capacity" value={`${r.summary.payloadCapacity_kg} kg`} bold
+            info="How much cargo this wing configuration can carry at max payload. This is the primary output — everything is sized around your wingspan." />
+          <Row label="Empty Weight" value={`${r.summary.m_empty_kg} kg`} bold
+            info="Airframe + motor + battery + electronics. Everything except the payload." />
           <Row label="Wingspan" value={`${r.summary.wingspan_m} m`} bold
-            info="How wide the wing is from tip to tip." />
+            info="Tip-to-tip span of the main wing. Combined span across all panels shown below." />
+          <Row label="Combined Span" value={`${r.summary.combinedSpan_m} m  (${(r.summary.combinedSpan_m / 0.3048).toFixed(2)} ft)`} bold
+            info="Total span counting all wing panels (upper + lower). Competition limit is 15 ft = 4.572 m." />
           <Row label="Wing Area" value={`${r.summary.wingArea_m2} m²`} bold
-            info="The total flat surface area of the wing." />
+            info="The total flat surface area of all wing panels combined." />
           <Row label="Mean Aerodynamic Chord" value={`${r.summary.chord_m} m`} bold
             info="The average front-to-back width (depth) of the wing." />
-          <Row label="Aspect Ratio" value={r.summary.AR} bold
-            info="How long and skinny the wing is. Higher = more glider-like and efficient. 7 is a solid middle ground for SAE." />
           <Row label="Stall Speed" value={`${r.summary.V_stall_ms} m/s`} bold
-            info="The slowest the plane can fly before the wing stops making lift and it falls. Never fly slower than this." />
+            info="The slowest the plane can fly before the wing stops making lift. Never fly slower than this." />
           <Row label="Cruise Speed" value={`${r.summary.V_cruise_ms} m/s`} bold
-            info="The most efficient flying speed — you get the most range and endurance here." />
+            info="Most efficient flying speed — best range and endurance here." />
           <Row label="Total Weight (GTOW)" value={`${r.summary.m_total_kg} kg`} bold
-            info="Gross Take-Off Weight — everything combined: airframe, motor, battery, and payload." />
+            info="Gross Take-Off Weight at max payload: airframe + motor + battery + payload." />
           <Row label="Max L/D" value={r.summary.LD_max} bold
-            info="Lift-to-drag ratio. For every meter the plane drops in a glide, it travels this many meters forward. Higher = more efficient wing." />
+            info="Lift-to-drag ratio — meters forward per meter of altitude lost in a glide." />
           <Row label="Recommended CG" value={`${r.summary.CG_pctMAC}% MAC`} bold
-            info="Where to balance the plane. Measured from the front edge of the wing as a percentage of the chord. Balance it here for safe, stable flight." />
+            info="Where to balance the plane from the wing leading edge." />
           <Row label="Min Motor Thrust" value={`${r.summary.T_min_gf} gf`} bold
-            info="The minimum push your motor needs to produce to fly AND climb. If your motor can't do this, the plane won't take off properly." />
+            info="Minimum motor thrust to fly and climb with full payload." />
         </div>
       </Section>
 
@@ -123,8 +127,8 @@ export default function ResultsDisplay({ results: r, onBack }) {
       <Section title="Wing Geometry &amp; Sizing">
         <Row label="Wing Area (S)" value={r.wing.area_m2} unit="m²"
           info="Total flat surface of the wing. Bigger wing = more lift but also more weight and drag." />
-        <Row label="Wingspan (b)" value={`${r.wing.span_m} m  [limit: ${r.meta.maxWingspan} m]`} bold
-          info="Tip-to-tip width. The 10 m competition limit is applied here." />
+        <Row label="Wingspan (b)" value={`${r.wing.span_m} m  [combined: ${r.inputs.combinedSpan_m} m = ${(r.inputs.combinedSpan_m / 0.3048).toFixed(2)} ft, limit 15 ft]`} bold
+          info="Tip-to-tip span of the main wing. Combined span counts all panels — must be ≤ 15 ft (4.572 m)." />
         <Row label="Mean Aerodynamic Chord (MAC)" value={r.wing.chord_m} unit="m" bold
           info="Average front-to-back depth of the wing. Most stability calculations use this as the reference length." />
         <Row label="Aspect Ratio (AR)" value={r.wing.AR} bold
@@ -420,8 +424,8 @@ export default function ResultsDisplay({ results: r, onBack }) {
           info="Estimated motor mass. Replace with your actual motor's spec sheet value." />
         <Row label="Battery (est.)" value={r.weights.m_battery_kg} unit="kg"
           info="Estimated LiPo battery mass. Replace with your actual battery weight." />
-        <Row label="Payload" value={r.weights.m_payload_kg} unit="kg"
-          info="The cargo you entered. This is what the whole aircraft is sized around." />
+        <Row label="Payload Capacity" value={r.weights.m_payload_kg} unit="kg" bold
+          info="Max payload this wing can carry — calculated as max lift minus empty weight at the stall speed target." />
         <hr className="my-2 border-gray-700" />
         <Row label="Empty Weight" value={r.weights.m_empty_kg} unit="kg" bold
           info="Everything except the payload — the bare aircraft ready to fly." />
@@ -558,7 +562,7 @@ export default function ResultsDisplay({ results: r, onBack }) {
       <p className="text-xs text-gray-700 mt-4 mb-8 border-t border-gray-800 pt-3">
         Stall target {r.meta.V_stall_target} m/s · AR {r.meta.AR_target} ·
         V_ht {r.meta.V_ht_target} · V_vt {r.meta.V_vt_target} ·
-        SM {r.meta.SM_target_pct}% MAC · Max span {r.meta.maxWingspan} m
+        SM {r.meta.SM_target_pct}% MAC · Combined span limit {r.meta.maxCombinedSpan_ft} ft ({r.meta.maxCombinedSpan_m} m)
       </p>
     </div>
   );
