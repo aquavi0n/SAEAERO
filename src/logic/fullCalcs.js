@@ -436,6 +436,27 @@ export function computeFullReport(airfoilId, tailId, payloadKg) {
       ? 'NACA 0009 (9% thick) — thinner section reduces weight and drag at small chord. Critical for T-tail where fin-tip mass drives flutter margin.'
       : 'NACA 0012 (12% thick) — symmetric section, good structural depth, easier to build accurately. Standard choice for tail surfaces.',
 
+    // Plain-English summary — replaces the confusing notices box in the UI
+    tldr: (() => {
+      const parts = [
+        `Wing is ${r(b,2)} m wide with a ${r(c,2)} m chord, sized to carry ${payloadKg} kg.`,
+        `Total aircraft weight: ${r(m_total,2)} kg.`,
+        `Never fly slower than ${r(V_stall,1)} m/s — that's the stall speed.`,
+        `Best cruise is ${r(V_cruise,1)} m/s.`,
+        `Balance the plane at ${r(h_cg_rec*100,0)}% of the wing chord from the front edge (${r(h_cg_rec*c*100,1)} cm from the leading edge).`,
+        `Motor must push at least ${Math.round(T_min_gf)} gf.`,
+      ];
+      if (b >= MAX_WINGSPAN * 0.95)
+        parts.push(`Wingspan is at the 10 m competition limit — stall speed may be slightly above target.`);
+      if (Re_stall < 70000)
+        parts.push(`The chord is very short, which makes the wing less predictable at low speed. Consider reducing payload or using a higher-lift airfoil.`);
+      else if (Re_cruise < 100000)
+        parts.push(`Low-speed wing — airfoil choice matters a lot here. S1223 or E214 would work better than NACA sections.`);
+      if (V_ht < 0.35)
+        parts.push(`Pitch stability may be marginal — consider making the tail bigger or moving it further back.`);
+      return parts.join(' ');
+    })(),
+
     warnings,
 
     meta: {
