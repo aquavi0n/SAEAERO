@@ -72,7 +72,7 @@ export default function ResultsDisplay({ results: r, onBack }) {
         <div>
           <h1 className="text-xl font-bold text-white">Aircraft Design Report</h1>
           <p className="text-sm text-gray-500 mt-0.5">
-            {r.inputs.airfoilName} &middot; {r.inputs.tailTypeName} &middot; {r.inputs.payloadKg} kg payload
+            {r.inputs.airfoilName} &middot; {r.inputs.wingConfigName} &middot; {r.inputs.tailTypeName} &middot; {r.inputs.payloadKg} kg payload
           </p>
         </div>
         <div className="flex gap-2 shrink-0">
@@ -137,8 +137,12 @@ export default function ResultsDisplay({ results: r, onBack }) {
           info="How fat the wing cross-section is compared to its width. Thicker = stronger internal structure, but slightly more drag." />
         <Row label="Airfoil Camber" value={`${r.wing.camberPct}%`}
           info="How curved the top surface of the wing is. More camber = more lift at slow speeds, but more drag too." />
-        <Row label="CL_max" value={r.wing.CL_max}
-          info="The most lift the wing can generate before stalling. Higher means you can fly slower or carry more weight on the same wing." />
+        <Row label="CL_max (airfoil)" value={r.wing.CL_max}
+          info="The maximum lift coefficient the airfoil can produce on its own, from the airfoil data." />
+        {r.wingConfig.id !== 'MONOPLANE' && (
+          <Row label="CL_max (effective, with interference)" value={r.wing.CL_max_eff}
+            info="For biplanes and sesquiplanes, the wings interfere with each other and can't each produce full lift. This is the corrected effective CL_max used in all calculations." />
+        )}
         <hr className="my-2 border-gray-800" />
         <Row label="Incidence Angle (root)" value={`${r.wing.incidence_deg}°`}
           info="The angle the wing is tilted relative to the fuselage. A few degrees lets the fuselage fly level while the wing is at the right angle to produce lift." />
@@ -147,6 +151,68 @@ export default function ResultsDisplay({ results: r, onBack }) {
         <Row label="Dihedral" value={`${r.wing.dihedral_deg}°`}
           info="Tilting the wingtips upward like a shallow V. If the plane rolls sideways, dihedral naturally rolls it back to level." />
         <Note text={r.wing.dihedralNote} />
+
+        {/* Wing configuration badge */}
+        <hr className="my-3 border-gray-800" />
+        <Row label="Wing Configuration" value={r.wingConfig.name} bold
+          info="The planform type selected. Affects lift, drag, and structural weight of the wing." />
+        <Note text={r.wingConfig.note} />
+
+        {/* Biplane panel details */}
+        {r.wingPanels.type === 'BIPLANE' && (
+          <>
+            <Sub title="Upper Wing" />
+            <Row label="Span" value={r.wingPanels.upper_span_m} unit="m"
+              info="Tip-to-tip span of the upper wing. Equal to the full wingspan." />
+            <Row label="Chord" value={r.wingPanels.upper_chord_m} unit="m"
+              info="Front-to-back depth of the upper wing panel." />
+            <Row label="Area" value={r.wingPanels.upper_area_m2} unit="m²"
+              info="Surface area of the upper wing. Half of total wing area." />
+            <Sub title="Lower Wing" />
+            <Row label="Span" value={r.wingPanels.lower_span_m} unit="m"
+              info="Tip-to-tip span of the lower wing. Same as upper for a symmetric biplane." />
+            <Row label="Chord" value={r.wingPanels.lower_chord_m} unit="m"
+              info="Front-to-back depth of the lower wing. Same chord as upper." />
+            <Row label="Area" value={r.wingPanels.lower_area_m2} unit="m²"
+              info="Surface area of the lower wing. Half of total wing area." />
+            <Sub title="Biplane Geometry" />
+            <Row label="Gap between wings" value={r.wingPanels.gap_m} unit="m"
+              info="Vertical distance between upper and lower wings. Equal to the chord length (gap/chord = 1.0) — the standard proportion for good performance." />
+            <Row label="Gap / Chord ratio" value={r.wingPanels.gapChordRatio}
+              info="How the gap compares to the wing chord. 1.0 is the standard biplane design ratio. Higher gap reduces wing interference." />
+            <Row label="Strut spacing (from root)" value={r.wingPanels.strutSpacing_m} unit="m"
+              info="Where to place the interplane struts connecting upper and lower wings. Struts at 1/3 and 2/3 span balance structural loads evenly." />
+            <Note text="Drag penalty factor: ×1.10 on CD₀ for struts and interference. Structural weight factor: ×1.30 on wing mass." />
+          </>
+        )}
+
+        {/* Sesquiplane panel details */}
+        {r.wingPanels.type === 'SESQUIPLANE' && (
+          <>
+            <Sub title="Upper Wing (full span)" />
+            <Row label="Span" value={r.wingPanels.upper_span_m} unit="m"
+              info="Tip-to-tip span of the upper wing — the full wingspan." />
+            <Row label="Chord" value={r.wingPanels.upper_chord_m} unit="m"
+              info="Front-to-back depth of the upper wing." />
+            <Row label="Area" value={r.wingPanels.upper_area_m2} unit="m²"
+              info="Surface area of the upper wing (~62.5% of total)." />
+            <Sub title="Lower Wing (60% span)" />
+            <Row label="Span" value={r.wingPanels.lower_span_m} unit="m"
+              info="Tip-to-tip span of the lower wing — 60% of the full wingspan." />
+            <Row label="Chord" value={r.wingPanels.lower_chord_m} unit="m"
+              info="Same chord as the upper wing — both panels have identical depth." />
+            <Row label="Area" value={r.wingPanels.lower_area_m2} unit="m²"
+              info="Surface area of the lower wing (~37.5% of total)." />
+            <Sub title="Interplane Geometry" />
+            <Row label="Gap between wings" value={r.wingPanels.gap_m} unit="m"
+              info="Vertical distance between upper and lower wing surfaces." />
+            <Row label="Gap / Chord ratio" value={r.wingPanels.gapChordRatio}
+              info="How the gap compares to the wing chord. 1.0 is the standard proportion." />
+            <Row label="Strut position (from root)" value={r.wingPanels.strutSpacing_m} unit="m"
+              info="Where to place the single interplane strut connecting the two wings — at the midspan of the lower wing." />
+            <Note text="Drag penalty factor: ×1.06 on CD₀. Structural weight factor: ×1.18 on wing mass. Better payload fraction than biplane." />
+          </>
+        )}
       </Section>
 
       {/* ── AILERONS ───────────────────────────────────────────────────── */}
@@ -182,8 +248,12 @@ export default function ResultsDisplay({ results: r, onBack }) {
         <Row label="CL at Cruise" value={r.aero.CL_cruise}
           info="How hard the wing works during normal flight." />
         <hr className="my-2 border-gray-800" />
-        <Row label="Parasite Drag (CD₀)" value={r.aero.CD0}
-          info="Drag from just pushing the aircraft through air — fuselage, landing gear, and surface friction. Exists even when making zero lift." />
+        <Row label="Parasite Drag (CD₀ baseline)" value={r.aero.CD0}
+          info="Baseline drag from pushing the aircraft through air — fuselage, landing gear, and surface friction. Before any multi-plane penalty is applied." />
+        {r.wingConfig.id !== 'MONOPLANE' && (
+          <Row label="Effective Parasite Drag (CD₀ with penalty)" value={r.aero.CD0_eff}
+            info="CD₀ after applying the biplane/sesquiplane drag penalty for extra struts and wing interference. This is what's used in all performance calculations." />
+        )}
         <Row label="Induced Drag (CDᵢ) at Cruise" value={r.aero.CDi_cruise}
           info="Extra drag created as a side-effect of generating lift. Unavoidable — lift always comes with a small drag penalty." />
         <Row label="Total Drag (CD) at Cruise" value={r.aero.CD_cruise}

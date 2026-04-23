@@ -7,9 +7,9 @@ export default function App() {
   const [results, setResults] = useState(null);
   const [error,   setError]   = useState(null);
 
-  function handleCalculate(airfoilId, tailId, payloadKg) {
+  function handleCalculate(airfoilId, wingConfigId, tailId, payloadKg) {
     try {
-      setResults(computeFullReport(airfoilId, tailId, payloadKg));
+      setResults(computeFullReport(airfoilId, wingConfigId, tailId, payloadKg));
       setError(null);
     } catch (e) {
       setError(e.message);

@@ -1,10 +1,11 @@
 // fullCalcs.js — Master aerodynamic calculator
-// Three inputs: airfoil ID, tail config ID, payload mass (kg)
+// Four inputs: airfoil ID, wing config ID, tail config ID, payload mass (kg)
 // Returns a comprehensive aircraft design report with all calculations.
 
 import { AIRFOILS } from '../data/airfoils.js';
 import { TAIL_CONFIGS } from '../data/tailConfigs.js';
 import { MATERIALS } from '../data/materials.js';
+import { WING_CONFIGS } from '../data/wingConfigs.js';
 
 // ─── Physical constants ───────────────────────────────────────────────────────
 const RHO   = 1.225;     // kg/m³ — air density at sea level, ISA 15°C
@@ -22,6 +23,7 @@ const V_VT_TARGET        = 0.04;   // —   — vertical tail volume coefficient
 const STATIC_MARGIN_TARGET = 0.12; // —   — 12% MAC, conservative for hand-launch UAVs
 const OSWALD_E           = 0.80;   // —   — Oswald efficiency factor, typical SAE build
 const CD0                = 0.025;  // —   — zero-lift drag coefficient (fuselage + landing gear)
+const GAP_CHORD_RATIO    = 1.0;    // —   — assumed gap/chord for biplane/sesquiplane
 
 // ─── Fixed weight estimates (no motor/battery input required) ─────────────────
 const W_ELECTRONICS = 0.150; // kg — ESC + receiver + servos
@@ -43,13 +45,25 @@ const AIRFOIL_GEOM = {
 
 const r = (n, d = 4) => (Number.isFinite(n) ? parseFloat(n.toFixed(d)) : NaN);
 
-export function computeFullReport(airfoilId, tailId, payloadKg) {
-  const airfoil  = AIRFOILS.find(a => a.id === airfoilId);
-  const tailConf = TAIL_CONFIGS.find(t => t.id === tailId);
+export function computeFullReport(airfoilId, wingConfigId, tailId, payloadKg) {
+  const airfoil    = AIRFOILS.find(a => a.id === airfoilId);
+  const tailConf   = TAIL_CONFIGS.find(t => t.id === tailId);
+  const wingConfig = WING_CONFIGS.find(w => w.id === wingConfigId);
   if (!airfoil || !tailConf) throw new Error('Invalid airfoil or tail config ID');
+  if (!wingConfig) throw new Error('Invalid wing config ID');
 
   const geom   = AIRFOIL_GEOM[airfoilId] ?? AIRFOIL_GEOM['NACA_4412'];
   const CL_max = airfoil.CL_max;
+
+  // Effective CL_max accounting for biplane/sesquiplane interference (Munck)
+  // For monoplane, no penalty. For multi-plane, liftInterferenceFactor < 1 plus small
+  // gap bonus: CL_max_eff = CL_max × interference × (1 + gap/chord × 0.1)
+  const CL_max_eff = wingConfigId === 'MONOPLANE'
+    ? CL_max
+    : CL_max * wingConfig.liftInterferenceFactor * (1 + GAP_CHORD_RATIO * 0.1);
+
+  // Effective CD0: extra strut/interference drag for multi-plane configurations
+  const CD0_eff = CD0 * wingConfig.dragPenaltyFactor;
 
   // ── 1. Iterative weight / geometry convergence ───────────────────────────
   // Wing area, tail areas, and component weights all depend on each other.
@@ -62,8 +76,8 @@ export function computeFullReport(airfoilId, tailId, payloadKg) {
   for (let iter = 0; iter < 30; iter++) {
     const W_total = m_total * G;
 
-    // Wing area required to stall at target speed
-    S = (2 * W_total) / (RHO * CL_max * V_STALL_TARGET ** 2);
+    // Wing area required to stall at target speed (uses effective CL_max)
+    S = (2 * W_total) / (RHO * CL_max_eff * V_STALL_TARGET ** 2);
 
     // Wingspan from AR, hard-capped at competition limit
     b       = Math.min(Math.sqrt(S * AR_WING), MAX_WINGSPAN);
@@ -77,8 +91,9 @@ export function computeFullReport(airfoilId, tailId, payloadKg) {
     S_ht = (V_HT_TARGET * S * c) / L_ht;
     S_vt = (V_VT_TARGET * S * b) / L_ht;
 
-    // Component masses using baseline balsa density
-    m_wing  = S       * MAT_DENSITY_BASELINE * 2.2; // 2.2× — ribs, spars, covering
+    // Component masses. Wing weight scaled by structuralWeightFactor —
+    // biplanes need extra struts and interplane bracing.
+    m_wing  = S       * MAT_DENSITY_BASELINE * 2.2 * wingConfig.structuralWeightFactor;
     m_htail = S_ht    * MAT_DENSITY_BASELINE * 1.5;
     m_vtail = S_vt    * MAT_DENSITY_BASELINE * 1.5;
     m_fuse  = 0.120 + 0.060 * b; // fuselage scales with span
@@ -96,12 +111,12 @@ export function computeFullReport(airfoilId, tailId, payloadKg) {
   const W_total = m_total * G; // Newtons
 
   // ── 2. Stall and cruise performance ─────────────────────────────────────
-  const V_stall = Math.sqrt((2 * W_total) / (RHO * S * CL_max));
+  const V_stall = Math.sqrt((2 * W_total) / (RHO * S * CL_max_eff));
 
-  // Best L/D occurs at CL_LD = sqrt(π × AR × e × CD0)
-  const CL_LD     = Math.sqrt(CD0 * Math.PI * AR_actual * OSWALD_E);
+  // Best L/D occurs at CL_LD = sqrt(π × AR × e × CD0_eff)
+  const CL_LD     = Math.sqrt(CD0_eff * Math.PI * AR_actual * OSWALD_E);
   const CDi_LD    = CL_LD ** 2 / (Math.PI * AR_actual * OSWALD_E);
-  const CD_LD     = CD0 + CDi_LD; // = 2 × CD0 at best L/D
+  const CD_LD     = CD0_eff + CDi_LD; // = 2 × CD0_eff at best L/D
   const LD_max    = CL_LD / CD_LD;
   const V_bestLD  = Math.sqrt((2 * W_total) / (RHO * S * CL_LD));
 
@@ -109,7 +124,7 @@ export function computeFullReport(airfoilId, tailId, payloadKg) {
   const V_cruise   = V_bestLD;
   const CL_cruise  = (2 * W_total) / (RHO * V_cruise ** 2 * S);
   const CDi_cruise = CL_cruise ** 2 / (Math.PI * AR_actual * OSWALD_E);
-  const CD_cruise  = CD0 + CDi_cruise;
+  const CD_cruise  = CD0_eff + CDi_cruise;
   const LD_cruise  = CL_cruise / CD_cruise;
   const D_cruise   = 0.5 * RHO * V_cruise ** 2 * S * CD_cruise; // N
 
@@ -223,7 +238,56 @@ export function computeFullReport(airfoilId, tailId, payloadKg) {
   const spar_pos_m   = 0.25 * c;                             // at 25% chord
   const spar_depth_m = geom.thickness * c * 0.65;            // 65% of airfoil thickness at spar location
 
-  // ── 11. Material recommendation ─────────────────────────────────────────
+  // ── 11. Per-panel wing geometry (biplane / sesquiplane) ─────────────────
+  let wingPanels;
+  if (wingConfigId === 'MONOPLANE') {
+    wingPanels = {
+      type:     'MONOPLANE',
+      panelCount: 1,
+      span_m:   r(b, 4),
+      chord_m:  r(c, 4),
+      area_m2:  r(S, 4),
+    };
+  } else if (wingConfigId === 'BIPLANE') {
+    // Equal span, equal chord, equal area per wing
+    const c_bi  = S / (2 * b);
+    const gap_m = GAP_CHORD_RATIO * c_bi;
+    wingPanels = {
+      type:          'BIPLANE',
+      panelCount:    2,
+      upper_span_m:  r(b, 4),
+      upper_chord_m: r(c_bi, 4),
+      upper_area_m2: r(S / 2, 4),
+      lower_span_m:  r(b, 4),
+      lower_chord_m: r(c_bi, 4),
+      lower_area_m2: r(S / 2, 4),
+      gap_m:         r(gap_m, 3),
+      gapChordRatio: GAP_CHORD_RATIO,
+      strutSpacing_m: r(b / 3, 3), // struts at 1/3 and 2/3 of span from root
+    };
+  } else {
+    // SESQUIPLANE: upper full span, lower 60% span, equal chord
+    // Total area S distributed so both wings share the same chord:
+    //   chord = S / (b_upper + b_lower) = S / (b + 0.6b) = S / (1.6b)
+    const c_sesqui  = S / (1.6 * b);
+    const b_lower   = 0.6 * b;
+    const gap_m     = GAP_CHORD_RATIO * c_sesqui;
+    wingPanels = {
+      type:          'SESQUIPLANE',
+      panelCount:    2,
+      upper_span_m:  r(b, 4),
+      upper_chord_m: r(c_sesqui, 4),
+      upper_area_m2: r(S / 1.6, 4),
+      lower_span_m:  r(b_lower, 4),
+      lower_chord_m: r(c_sesqui, 4),
+      lower_area_m2: r(0.6 * S / 1.6, 4),
+      gap_m:         r(gap_m, 3),
+      gapChordRatio: GAP_CHORD_RATIO,
+      strutSpacing_m: r(b_lower / 2, 3), // single interplane strut at mid lower-span
+    };
+  }
+
+  // ── 12. Material recommendation ─────────────────────────────────────────
   let matRec, matRecAlt;
   if (b > 4.0 || payloadKg > 3.0) {
     matRec    = MATERIALS.find(m => m.id === 'CF_1MM');
@@ -238,14 +302,14 @@ export function computeFullReport(airfoilId, tailId, payloadKg) {
 
   // Mass comparison for every material
   const matComparison = MATERIALS.map(mat => {
-    const mw = r(S          * mat.densityKgM2 * 2.2, 3);
+    const mw = r(S          * mat.densityKgM2 * 2.2 * wingConfig.structuralWeightFactor, 3);
     const mt = r((S_ht + S_vt) * mat.densityKgM2 * 1.5, 3);
     const ms = r(mw + mt, 3);
     const mg = r(ms + m_fuse + W_ELECTRONICS + W_MOTOR_EST + W_BATTERY_EST + payloadKg, 3);
     return { id: mat.id, name: mat.name, mWing: mw, mTail: mt, mStruct: ms, mGTOW: mg, note: mat.note };
   });
 
-  // ── 12. Dihedral recommendation ──────────────────────────────────────────
+  // ── 13. Dihedral recommendation ──────────────────────────────────────────
   let dihedral_deg, dihedral_note;
   if (tailId === 'V_TAIL') {
     dihedral_deg  = 2;
@@ -258,7 +322,7 @@ export function computeFullReport(airfoilId, tailId, payloadKg) {
     dihedral_note = 'Standard 5° provides roll stability without excessive adverse yaw.';
   }
 
-  // ── 13. Warnings ─────────────────────────────────────────────────────────
+  // ── 14. Warnings ─────────────────────────────────────────────────────────
   const warnings = [];
   if (airfoil.warningText)
     warnings.push({ level: 'warn', text: airfoil.warningText });
@@ -274,14 +338,16 @@ export function computeFullReport(airfoilId, tailId, payloadKg) {
   else if (Re_cruise < 100000)
     warnings.push({ level: 'warn', text: `Cruise Re = ${Math.round(Re_cruise).toLocaleString()} — below 100,000. Low-Re airfoil (e.g. S1223) preferred.` });
 
-  // ── 14. Assemble report ──────────────────────────────────────────────────
+  // ── 15. Assemble report ──────────────────────────────────────────────────
   return {
     inputs: {
       airfoilId,
-      airfoilName:  airfoil.name,
+      airfoilName:    airfoil.name,
+      wingConfigId,
+      wingConfigName: wingConfig.name,
       tailId,
-      tailTypeName: tailConf.name,
-      payloadKg:    r(payloadKg, 2),
+      tailTypeName:   tailConf.name,
+      payloadKg:      r(payloadKg, 2),
     },
 
     summary: {
@@ -310,9 +376,21 @@ export function computeFullReport(airfoilId, tailId, payloadKg) {
       dihedral_deg,
       dihedralNote:     dihedral_note,
       CL_max,
+      CL_max_eff:       r(CL_max_eff, 4),
       thicknessPct:     r(geom.thickness * 100, 1),
       camberPct:        r(geom.camber * 100, 2),
     },
+
+    wingConfig: {
+      id:                     wingConfig.id,
+      name:                   wingConfig.name,
+      note:                   wingConfig.note,
+      liftInterferenceFactor: wingConfig.liftInterferenceFactor,
+      dragPenaltyFactor:      wingConfig.dragPenaltyFactor,
+      structuralWeightFactor: wingConfig.structuralWeightFactor,
+    },
+
+    wingPanels,
 
     ailerons: {
       span_each_m:      r(ail_span_each, 4),
@@ -329,9 +407,11 @@ export function computeFullReport(airfoilId, tailId, payloadKg) {
       V_cruise_ms:   r(V_cruise, 3),
       V_bestLD_ms:   r(V_bestLD, 3),
       CL_max,
+      CL_max_eff:    r(CL_max_eff, 4),
       CL_cruise:     r(CL_cruise, 4),
       CL_LD:         r(CL_LD, 4),
-      CD0,
+      CD0:           CD0,
+      CD0_eff:       r(CD0_eff, 5),
       CDi_cruise:    r(CDi_cruise, 5),
       CD_cruise:     r(CD_cruise, 5),
       LD_max:        r(LD_max, 2),
@@ -381,7 +461,7 @@ export function computeFullReport(airfoilId, tailId, payloadKg) {
       rud_height_m:  r(rud_height, 4),
       rud_area_m2:   r(rud_area, 5),
       // V-tail specific (null if not V-tail)
-      isVTail:           tailId === 'V_TAIL',
+      isVTail:            tailId === 'V_TAIL',
       vtail_dihedral_deg: vtail_dihedral_deg !== null ? r(vtail_dihedral_deg, 2) : null,
       vtail_panel_m2:     vtail_panel_area   !== null ? r(vtail_panel_area, 4)   : null,
       vtail_total_m2:     vtail_total_area   !== null ? r(vtail_total_area, 4)   : null,
@@ -438,7 +518,13 @@ export function computeFullReport(airfoilId, tailId, payloadKg) {
 
     // Plain-English summary — replaces the confusing notices box in the UI
     tldr: (() => {
+      const configNote = wingConfigId === 'MONOPLANE'
+        ? 'Single wing (monoplane).'
+        : wingConfigId === 'BIPLANE'
+          ? `Biplane: two equal wings stacked. Each wing is ${r(S/2, 2)} m² and ${r(S/(2*b)*100, 1)} cm chord.`
+          : `Sesquiplane: upper wing (${r(b, 2)} m span) and lower wing (${r(0.6*b, 2)} m span).`;
       const parts = [
+        configNote,
         `Wing is ${r(b,2)} m wide with a ${r(c,2)} m chord, sized to carry ${payloadKg} kg.`,
         `Total aircraft weight: ${r(m_total,2)} kg.`,
         `Never fly slower than ${r(V_stall,1)} m/s — that's the stall speed.`,
@@ -471,6 +557,19 @@ export function computeFullReport(airfoilId, tailId, payloadKg) {
     // ── Verification steps: every major formula with substituted values ───
     steps: [
       // --- Weight & Geometry ---
+      ...(wingConfigId !== 'MONOPLANE' ? [{
+        group: 'Weight & Geometry (Iterative Convergence)',
+        name:  'Effective CL_max (Biplane Interference Correction)',
+        formula: 'CL_max_eff = CL_max × liftFactor × (1 + gap/chord × 0.1)',
+        calc: `${CL_max} × ${wingConfig.liftInterferenceFactor} × (1 + ${GAP_CHORD_RATIO} × 0.1)`,
+        result: `${r(CL_max_eff, 5)}`,
+      }, {
+        group: 'Weight & Geometry (Iterative Convergence)',
+        name:  'Effective Parasite Drag (Multi-plane Penalty)',
+        formula: 'CD0_eff = CD0 × dragPenaltyFactor',
+        calc: `${CD0} × ${wingConfig.dragPenaltyFactor}`,
+        result: `${r(CD0_eff, 5)}`,
+      }] : []),
       {
         group: 'Weight & Geometry (Iterative Convergence)',
         name:  'Converged Total Mass',
@@ -488,8 +587,8 @@ export function computeFullReport(airfoilId, tailId, payloadKg) {
       {
         group: 'Weight & Geometry (Iterative Convergence)',
         name:  'Required Wing Area',
-        formula: 'S = 2W / (ρ × CL_max × V_stall_target²)',
-        calc: `2 × ${r(W_total,3)} / (${RHO} × ${CL_max} × ${V_STALL_TARGET}²)`,
+        formula: 'S = 2W / (ρ × CL_max_eff × V_stall_target²)',
+        calc: `2 × ${r(W_total,3)} / (${RHO} × ${r(CL_max_eff,4)} × ${V_STALL_TARGET}²)`,
         result: `${r(S,4)} m²`,
       },
       {
@@ -538,15 +637,15 @@ export function computeFullReport(airfoilId, tailId, payloadKg) {
       {
         group: 'Aerodynamic Performance',
         name:  'Stall Speed (Verification)',
-        formula: 'V_s = √(2W / (ρ × S × CL_max))',
-        calc: `√(2 × ${r(W_total,3)} / (${RHO} × ${r(S,4)} × ${CL_max}))`,
+        formula: 'V_s = √(2W / (ρ × S × CL_max_eff))',
+        calc: `√(2 × ${r(W_total,3)} / (${RHO} × ${r(S,4)} × ${r(CL_max_eff,4)}))`,
         result: `${r(V_stall,4)} m/s`,
       },
       {
         group: 'Aerodynamic Performance',
         name:  'CL at Best L/D',
-        formula: 'CL_LD = √(π × AR × e × CD0)',
-        calc: `√(π × ${r(AR_actual,4)} × ${OSWALD_E} × ${CD0})`,
+        formula: 'CL_LD = √(π × AR × e × CD0_eff)',
+        calc: `√(π × ${r(AR_actual,4)} × ${OSWALD_E} × ${r(CD0_eff,5)})`,
         result: `${r(CL_LD,5)}`,
       },
       {
@@ -558,10 +657,10 @@ export function computeFullReport(airfoilId, tailId, payloadKg) {
       },
       {
         group: 'Aerodynamic Performance',
-        name:  'Parasite Drag (CD₀)',
-        formula: 'CD0 = 0.025 (empirical constant)',
-        calc: 'Fuselage + wing profile + landing gear contribution',
-        result: `${CD0}`,
+        name:  'Effective Parasite Drag (CD₀)',
+        formula: 'CD0_eff = CD0_baseline × dragPenaltyFactor',
+        calc: `${CD0} × ${wingConfig.dragPenaltyFactor}`,
+        result: `${r(CD0_eff,5)}`,
       },
       {
         group: 'Aerodynamic Performance',
@@ -573,15 +672,15 @@ export function computeFullReport(airfoilId, tailId, payloadKg) {
       {
         group: 'Aerodynamic Performance',
         name:  'Total Drag Coefficient at Cruise',
-        formula: 'CD = CD0 + CDi',
-        calc: `${CD0} + ${r(CDi_cruise,6)}`,
+        formula: 'CD = CD0_eff + CDi',
+        calc: `${r(CD0_eff,5)} + ${r(CDi_cruise,6)}`,
         result: `${r(CD_cruise,6)}`,
       },
       {
         group: 'Aerodynamic Performance',
         name:  'Maximum Lift-to-Drag Ratio',
-        formula: 'L/D_max = CL_LD / (2 × CD0)',
-        calc: `${r(CL_LD,5)} / (2 × ${CD0})`,
+        formula: 'L/D_max = CL_LD / (2 × CD0_eff)',
+        calc: `${r(CL_LD,5)} / (2 × ${r(CD0_eff,5)})`,
         result: `${r(LD_max,3)}`,
       },
       {
@@ -752,9 +851,9 @@ export function computeFullReport(airfoilId, tailId, payloadKg) {
       // --- Weight Budget ---
       {
         group: 'Weight Budget',
-        name:  'Wing Mass (balsa baseline)',
-        formula: 'm_wing = S × ρ_mat × 2.2',
-        calc: `${r(S,4)} m² × 0.040 kg/m² × 2.2`,
+        name:  `Wing Mass (balsa × ${wingConfig.structuralWeightFactor} structural factor)`,
+        formula: 'm_wing = S × ρ_mat × 2.2 × structuralWeightFactor',
+        calc: `${r(S,4)} m² × 0.040 kg/m² × 2.2 × ${wingConfig.structuralWeightFactor}`,
         result: `${r(m_wing,4)} kg`,
       },
       {

@@ -1,23 +1,26 @@
 import { useState } from 'react';
 import { AIRFOILS } from '../data/airfoils.js';
 import { TAIL_CONFIGS } from '../data/tailConfigs.js';
+import { WING_CONFIGS } from '../data/wingConfigs.js';
 
 const inputCls = 'w-full bg-gray-800 border border-gray-600 rounded px-3 py-2 text-sm text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent';
 const labelCls = 'block text-sm font-semibold text-gray-200 mb-1';
 
 export default function InputForm({ onCalculate }) {
-  const [airfoilId, setAirfoilId] = useState('NACA_4412');
-  const [tailId,    setTailId]    = useState('CONVENTIONAL');
-  const [payload,   setPayload]   = useState('1.0');
+  const [airfoilId,    setAirfoilId]    = useState('NACA_4412');
+  const [wingConfigId, setWingConfigId] = useState('MONOPLANE');
+  const [tailId,       setTailId]       = useState('CONVENTIONAL');
+  const [payload,      setPayload]      = useState('1.0');
 
-  const selAirfoil = AIRFOILS.find(a => a.id === airfoilId);
-  const selTail    = TAIL_CONFIGS.find(t => t.id === tailId);
+  const selAirfoil    = AIRFOILS.find(a => a.id === airfoilId);
+  const selWingConfig = WING_CONFIGS.find(w => w.id === wingConfigId);
+  const selTail       = TAIL_CONFIGS.find(t => t.id === tailId);
 
   function handleSubmit(e) {
     e.preventDefault();
     const kg = parseFloat(payload);
     if (!kg || kg <= 0) return;
-    onCalculate(airfoilId, tailId, kg);
+    onCalculate(airfoilId, wingConfigId, tailId, kg);
   }
 
   return (
@@ -35,6 +38,19 @@ export default function InputForm({ onCalculate }) {
         )}
         {selAirfoil?.warningText && (
           <p className="text-xs text-orange-400 mt-1 font-medium">⚠ {selAirfoil.warningText}</p>
+        )}
+      </div>
+
+      {/* Wing Configuration */}
+      <div className="mb-5">
+        <label className={labelCls}>Wing Configuration</label>
+        <select value={wingConfigId} onChange={e => setWingConfigId(e.target.value)} className={inputCls}>
+          {WING_CONFIGS.map(w => (
+            <option key={w.id} value={w.id}>{w.name}</option>
+          ))}
+        </select>
+        {selWingConfig && (
+          <p className="text-xs text-gray-500 mt-1">{selWingConfig.note}</p>
         )}
       </div>
 
