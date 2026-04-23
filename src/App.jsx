@@ -3,7 +3,7 @@ import InputForm from './components/InputForm.jsx';
 import ResultsDisplay from './components/ResultsDisplay.jsx';
 import { computeFullReport } from './logic/fullCalcs.js';
 
-const ACCESS_CODE = '4699966494';
+const ACCESS_CODE = '4694270727';
 
 function LockScreen({ onUnlock }) {
   const [input, setInput] = useState('');
