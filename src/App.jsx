@@ -18,29 +18,35 @@ export default function App() {
   }
 
   return (
-    <div className="min-h-screen bg-white text-gray-900 p-6 md:p-10" style={{ fontFamily: 'system-ui, sans-serif' }}>
-      <div className="max-w-3xl mx-auto">
-        <div className="mb-8 border-b border-gray-200 pb-5">
-          <h1 className="text-2xl font-bold tracking-tight">SAE Aero Calculator</h1>
-          <p className="text-sm text-gray-500 mt-1">
-            Full aerodynamic sizing from airfoil, payload, and tail configuration.
-            Max wingspan: 10 m.
-          </p>
-        </div>
+    <div className="min-h-screen bg-gray-950 text-gray-100" style={{ fontFamily: 'system-ui, sans-serif' }}>
+      {results === null ? (
+        /* ── Input screen: vertically + horizontally centered ── */
+        <div className="min-h-screen flex flex-col items-center justify-center px-4">
+          <div className="w-full max-w-md">
+            <div className="mb-8">
+              <h1 className="text-2xl font-bold text-white tracking-tight">SAE Aero Calculator</h1>
+              <p className="text-sm text-gray-400 mt-1">
+                Full aerodynamic sizing from airfoil, payload, and tail config. Max wingspan: 10 m.
+              </p>
+            </div>
 
-        {results === null ? (
-          <>
             {error && (
-              <div className="mb-5 p-3 bg-red-50 border border-red-200 text-red-700 text-sm rounded">
+              <div className="mb-5 p-3 bg-red-950 border border-red-800 text-red-300 text-sm rounded">
                 Error: {error}
               </div>
             )}
+
             <InputForm onCalculate={handleCalculate} />
-          </>
-        ) : (
-          <ResultsDisplay results={results} onBack={() => setResults(null)} />
-        )}
-      </div>
+          </div>
+        </div>
+      ) : (
+        /* ── Results screen: centered column ── */
+        <div className="flex flex-col items-center px-4 py-10">
+          <div className="w-full max-w-3xl">
+            <ResultsDisplay results={results} onBack={() => setResults(null)} />
+          </div>
+        </div>
+      )}
     </div>
   );
 }

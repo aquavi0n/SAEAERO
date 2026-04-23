@@ -10,6 +10,13 @@ html, body, #root {
   height: 100%;
   margin: 0;
   padding: 0;
+  color-scheme: dark;
+  background-color: #030712;
+}
+
+select option {
+  background-color: #1f2937;
+  color: #f9fafb;
 }
 
 /* Custom slider styling */
