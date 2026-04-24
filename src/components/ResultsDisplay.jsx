@@ -286,7 +286,7 @@ export default function ResultsDisplay({ results: r, onBack }) {
       {/* ── STABILITY & CONTROL ────────────────────────────────────────── */}
       <Section title="Stability &amp; Control">
         <Row label="H-Tail Volume Coefficient (V_ht)" value={r.stability.V_ht} bold
-          info={`A score for how much pitch control your horizontal tail provides. Think of it as 'pitch authority.' Our target is ${r.meta.V_ht_target} — higher is more stable.`} />
+          info={`A score for how much pitch control your horizontal tail provides. Think of it as 'pitch authority.' Target is ${r.meta.V_ht_target} — below 0.35 is critically low, below 0.45 is marginal.`} />
         <Row label="V-Tail Volume Coefficient (V_vt)" value={r.stability.V_vt} bold
           info={`Same idea but for left/right (yaw) stability. Target is ${r.meta.V_vt_target}. Too low and the plane will wander in yaw.`} />
         <Row label="Downwash Gradient (dε/dα)" value={r.stability.dEps_dAlpha}

@@ -21,13 +21,13 @@ const MAX_COMBINED_SPAN_M    = 4.572;   // 15 ft — hard competition constraint
 const COMBINED_SPAN_FACTOR   = { MONOPLANE: 1.0, BIPLANE: 2.0, SESQUIPLANE: 1.6 };
 const AR_WING                = 7.0;    // aspect ratio target
 const AR_HTAIL               = 4.0;
-const AR_VTAIL               = 1.5;
+const AR_VTAIL               = 1.8;   // Raymer typical 1.3–2.0; 1.8 gives better rudder effectiveness
 const V_STALL_TARGET         = 6.0;    // m/s
-const V_HT_TARGET            = 0.45;
+const V_HT_TARGET            = 0.50;  // RC/SAE range 0.40–0.60; 0.50 gives good elevator reserve
 const V_VT_TARGET            = 0.04;
 const STATIC_MARGIN_TARGET   = 0.12;   // 12% MAC
-const OSWALD_E               = 0.80;
-const CD0                    = 0.025;
+const OSWALD_E               = 0.75;   // rectangular untwisted wing; NASA/Raymer ref 0.70–0.75
+const CD0                    = 0.028;  // SAE aircraft with landing gear + simple fuselage
 const GAP_CHORD_RATIO        = 1.0;
 
 // ─── Fixed weight estimates ───────────────────────────────────────────────────
@@ -284,7 +284,9 @@ export function computeFullReport(airfoilId, wingConfigId, tailId, wingspanM) {
   if (combinedSpan >= MAX_COMBINED_SPAN_M * 0.95)
     warnings.push({ level: 'info', text: `Combined span is at or near the 15 ft limit (${r(combinedSpan,3)} m).` });
   if (V_ht < 0.35)
-    warnings.push({ level: 'crit', text: `V_ht = ${r(V_ht,3)} is below 0.35 — pitch stability marginal.` });
+    warnings.push({ level: 'crit', text: `V_ht = ${r(V_ht,3)} is below 0.35 — pitch authority critically low. Increase tail area or moment arm.` });
+  else if (V_ht < 0.45)
+    warnings.push({ level: 'warn', text: `V_ht = ${r(V_ht,3)} is below 0.45 — limited elevator authority. Target is 0.50.` });
   if (V_vt < 0.025)
     warnings.push({ level: 'crit', text: `V_vt = ${r(V_vt,3)} is below 0.025 — directional stability marginal.` });
   if (Re_stall < 70000)

@@ -1,5 +1,6 @@
 // SAE Aero competition airfoil database
-// CL_max and stallAngle are for Re ~500k (typical SAE Aero conditions)
+// CL_max values are for Re ~200k–300k (realistic SAE stall condition at low speed/small chord)
+// Sources: XFOIL polars (airfoiltools.com), UIUC LSATs, Selig & Guglielmo 1997
 
 export const AIRFOILS = [
   {
@@ -13,7 +14,7 @@ export const AIRFOILS = [
   {
     id: 'NACA_4412',
     name: 'NACA 4412',
-    CL_max: 1.65,
+    CL_max: 1.60,
     stallAngle: 14,
     warningText: null,
     constructionNote: 'Higher camber gives more lift but sharper stall break than 2412.',
@@ -21,8 +22,8 @@ export const AIRFOILS = [
   {
     id: 'NACA_0012',
     name: 'NACA 0012',
-    CL_max: 1.20,
-    stallAngle: 13,
+    CL_max: 1.05,
+    stallAngle: 12,
     warningText: null,
     constructionNote: 'Symmetric — suitable for tail surfaces. Not recommended for main wing.',
   },
@@ -37,7 +38,7 @@ export const AIRFOILS = [
   {
     id: 'E214',
     name: 'Eppler E214',
-    CL_max: 1.8,
+    CL_max: 1.70,
     stallAngle: 12,
     warningText: 'Abrupt stall — ensure adequate washout or stall strips near root.',
     constructionNote: 'High lift but sensitive to surface finish. Sand to 220 grit minimum.',
