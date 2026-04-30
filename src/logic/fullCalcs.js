@@ -19,10 +19,14 @@ const MU    = 1.789e-5;  // Pa·s  — dynamic viscosity of air at 15°C
 // ─── Design targets ──────────────────────────────────────────────────────────
 const MAX_COMBINED_SPAN_M    = 4.572;   // 15 ft — hard competition constraint (combined span)
 const COMBINED_SPAN_FACTOR   = { MONOPLANE: 1.0, BIPLANE: 2.0, SESQUIPLANE: 1.6 };
-const AR_WING                = 7.0;    // aspect ratio target
+// AR is optimised numerically per design — see AR_OPT_MIN/MAX below.
 const AR_HTAIL               = 4.0;
 const AR_VTAIL               = 1.8;   // Raymer typical 1.3–2.0; 1.8 gives better rudder effectiveness
-const V_STALL_TARGET         = 6.0;    // m/s
+// V_LAUNCH_MAX: SAE hand-launch ceiling. Stall speed must stay at or below this.
+// Sizing to this value (rather than an arbitrary lower target) maximises lift capacity.
+const V_LAUNCH_MAX           = 8.0;   // m/s
+const AR_OPT_MIN             = 3.5;   // practical lower bound — wider wing = lower stall speed + more payload
+const AR_OPT_MAX             = 12.0;  // upper bound — diminishing payload returns above here
 const V_HT_TARGET            = 0.50;  // RC/SAE range 0.40–0.60; 0.50 gives good elevator reserve
 const V_VT_TARGET            = 0.04;
 const STATIC_MARGIN_TARGET   = 0.12;   // 12% MAC
@@ -49,6 +53,23 @@ const AIRFOIL_GEOM = {
 
 const r = (n, d = 4) => (Number.isFinite(n) ? parseFloat(n.toFixed(d)) : NaN);
 
+// Returns expected payload (kg) for a candidate AR, given fixed span and CL/config.
+// Used to find the AR that maximises payload capacity.
+function _payloadAtAR(AR, b, CL_max_eff, wingConfig) {
+  const S     = (b * b) / AR;
+  const c     = S / b;
+  const L_ht  = 0.60 * b;
+  const S_ht  = (V_HT_TARGET * S * c) / L_ht;
+  const S_vt  = (V_VT_TARGET * S * b) / L_ht;
+  const m_wing  = S    * MAT_DENSITY_BASELINE * 2.2 * wingConfig.structuralWeightFactor;
+  const m_htail = S_ht * MAT_DENSITY_BASELINE * 1.5;
+  const m_vtail = S_vt * MAT_DENSITY_BASELINE * 1.5;
+  const m_fuse  = 0.120 + 0.060 * b;
+  const m_empty = m_wing + m_htail + m_vtail + m_fuse + W_ELECTRONICS + W_MOTOR_EST + W_BATTERY_EST;
+  const m_max   = (0.5 * RHO * CL_max_eff * V_LAUNCH_MAX ** 2 * S) / G;
+  return m_max - m_empty;
+}
+
 export function computeFullReport(airfoilId, wingConfigId, tailId, wingspanM) {
   const airfoil    = AIRFOILS.find(a => a.id === airfoilId);
   const tailConf   = TAIL_CONFIGS.find(t => t.id === tailId);
@@ -65,22 +86,32 @@ export function computeFullReport(airfoilId, wingConfigId, tailId, wingspanM) {
   const b           = Math.min(wingspanM, maxSpanThis);  // cap at competition limit
   const combinedSpan = b * combFactor;                   // total combined span (metres)
 
-  // ── Wing geometry from span ──────────────────────────────────────────────
-  // Area is set so that AR = AR_WING exactly: S = b² / AR
-  const S        = (b * b) / AR_WING;
-  const AR_actual = AR_WING;
-  const c        = S / b; // mean aerodynamic chord = b / AR
-
-  // ── Multi-plane corrections ──────────────────────────────────────────────
+  // ── Multi-plane lift and drag corrections ───────────────────────────────
   const CL_max_eff = wingConfigId === 'MONOPLANE'
     ? CL_max
     : CL_max * wingConfig.liftInterferenceFactor * (1 + GAP_CHORD_RATIO * 0.1);
 
   const CD0_eff = CD0 * wingConfig.dragPenaltyFactor;
 
-  // ── Max gross mass at stall (KEY: no iteration — span is fixed) ──────────
-  // At stall: L = W  →  ½ ρ CL_max_eff V_stall² S = m_max g
-  const m_max = (0.5 * RHO * CL_max_eff * V_STALL_TARGET ** 2 * S) / G;
+  // ── Wing geometry — AR optimised for max payload / min stall speed ───────
+  // Sweep AR_OPT_MIN → AR_OPT_MAX: more area (lower AR) raises lift capacity
+  // faster than it raises structural weight, so the optimum is always at the
+  // minimum buildable AR. AR_OPT_MIN = 3.5 is the practical floor — below that
+  // the chord gets impractically large for hand-built SAE aircraft.
+  let AR_opt = AR_OPT_MIN;
+  let _bestPayload = -Infinity;
+  for (let _ar = AR_OPT_MIN; _ar <= AR_OPT_MAX + 1e-9; _ar += 0.1) {
+    const _p = _payloadAtAR(_ar, b, CL_max_eff, wingConfig);
+    if (_p > _bestPayload) { _bestPayload = _p; AR_opt = _ar; }
+  }
+  const S        = (b * b) / AR_opt;
+  const AR_actual = AR_opt;
+  const c        = S / b;
+
+  // ── Max gross mass at stall ───────────────────────────────────────────────
+  // Size for V_LAUNCH_MAX (the SAE hand-launch ceiling) so the wing generates
+  // the maximum lift the competition allows. V_stall is an output, not a target.
+  const m_max = (0.5 * RHO * CL_max_eff * V_LAUNCH_MAX ** 2 * S) / G;
 
   // ── Tail sizing (same volume-coefficient method) ─────────────────────────
   const L_ht = 0.60 * b;
@@ -100,8 +131,10 @@ export function computeFullReport(airfoilId, wingConfigId, tailId, wingspanM) {
   const W_total   = m_total * G;
 
   // ── Stall and cruise performance ─────────────────────────────────────────
-  const V_stall = Math.sqrt((2 * W_total) / (RHO * S * CL_max_eff));
-  // V_stall ≈ V_STALL_TARGET when payloadKg > 0; lower when empty-only
+  // V_stall at full payload approaches V_LAUNCH_MAX (wing sized to that ceiling).
+  // V_stall_empty is the true minimum — flying empty with the maximum wing area.
+  const V_stall       = Math.sqrt((2 * W_total)         / (RHO * S * CL_max_eff));
+  const V_stall_empty = Math.sqrt((2 * m_empty * G)     / (RHO * S * CL_max_eff));
 
   const CL_LD    = Math.sqrt(CD0_eff * Math.PI * AR_actual * OSWALD_E);
   const CDi_LD   = CL_LD ** 2 / (Math.PI * AR_actual * OSWALD_E);
@@ -238,25 +271,34 @@ export function computeFullReport(airfoilId, wingConfigId, tailId, wingspanM) {
     };
   }
 
-  // ── Material recommendation ───────────────────────────────────────────────
-  let matRec, matRecAlt;
-  if (b > 4.0 || payloadKg > 3.0) {
-    matRec    = MATERIALS.find(m => m.id === 'CF_1MM');
-    matRecAlt = MATERIALS.find(m => m.id === 'BALSA_FG');
-  } else if (b > 2.0 || payloadKg > 1.5 || S > 1.5) {
-    matRec    = MATERIALS.find(m => m.id === 'BALSA_FG');
-    matRecAlt = MATERIALS.find(m => m.id === 'BALSA_3MM');
-  } else {
-    matRec    = MATERIALS.find(m => m.id === 'BALSA_3MM');
-    matRecAlt = MATERIALS.find(m => m.id === 'DEPRON_3MM');
+  // ── Material recommendation — best 3D printed filament + full comparison ──
+  // Minimum structural score required based on span and payload demands.
+  const minStructScore = b > 3.5 || payloadKg > 2.0 ? 9 : b > 2.0 || payloadKg > 1.0 ? 7 : 5;
+
+  // For each material compute the structural weight over this design's surfaces.
+  function matStructWeight(mat) {
+    const mw = S          * mat.densityKgM2 * 2.2 * wingConfig.structuralWeightFactor;
+    const mt = (S_ht + S_vt) * mat.densityKgM2 * 1.5;
+    return mw + mt;
   }
+
+  // Pick the lightest 3D printed filament that meets the structural threshold.
+  const PRINT_IDS = ['PRINT_LW_PLA', 'PRINT_CF_PLA', 'PRINT_ASA', 'PRINT_PETG'];
+  const printMats = PRINT_IDS.map(id => MATERIALS.find(m => m.id === id)).filter(Boolean);
+  const sortedPrint = [...printMats].sort((a, b_) => {
+    const penalty = (mat) => mat.structuralScore < minStructScore ? 1e6 : 0;
+    return (matStructWeight(a) + penalty(a)) - (matStructWeight(b_) + penalty(b_));
+  });
+  const matRec    = sortedPrint[0];
+  const matRecAlt = sortedPrint[1];
 
   const matComparison = MATERIALS.map(mat => {
     const mw = r(S          * mat.densityKgM2 * 2.2 * wingConfig.structuralWeightFactor, 3);
     const mt = r((S_ht + S_vt) * mat.densityKgM2 * 1.5, 3);
     const ms = r(mw + mt, 3);
     const mg = r(ms + m_fuse + W_ELECTRONICS + W_MOTOR_EST + W_BATTERY_EST + payloadKg, 3);
-    return { id: mat.id, name: mat.name, mWing: mw, mTail: mt, mStruct: ms, mGTOW: mg, note: mat.note };
+    const isPrint = PRINT_IDS.includes(mat.id);
+    return { id: mat.id, name: mat.name, mWing: mw, mTail: mt, mStruct: ms, mGTOW: mg, note: mat.note, isPrint };
   });
 
   // ── Dihedral ──────────────────────────────────────────────────────────────
@@ -366,9 +408,10 @@ export function computeFullReport(airfoilId, wingConfigId, tailId, wingspanM) {
     },
 
     aero: {
-      V_stall_ms:     r(V_stall, 3),
-      V_cruise_ms:    r(V_cruise, 3),
-      V_bestLD_ms:    r(V_bestLD, 3),
+      V_stall_ms:       r(V_stall, 3),
+      V_stall_empty_ms: r(V_stall_empty, 3),
+      V_cruise_ms:      r(V_cruise, 3),
+      V_bestLD_ms:      r(V_bestLD, 3),
       CL_max,
       CL_max_eff:     r(CL_max_eff, 4),
       CL_cruise:      r(CL_cruise, 4),
@@ -469,8 +512,18 @@ export function computeFullReport(airfoilId, wingConfigId, tailId, wingspanM) {
     },
 
     materials: {
-      rec:        matRec,
-      alt:        matRecAlt,
+      rec:             matRec,
+      alt:             matRecAlt,
+      printComparison: sortedPrint.map(mat => ({
+        id:      mat.id,
+        name:    mat.name,
+        score:   mat.structuralScore,
+        density: mat.densityKgM2,
+        mStruct: r(matStructWeight(mat), 3),
+        meetsReq: mat.structuralScore >= minStructScore,
+        note:    mat.note,
+      })),
+      minStructScore,
       comparison: matComparison,
     },
 
@@ -510,12 +563,12 @@ export function computeFullReport(airfoilId, wingConfigId, tailId, wingspanM) {
     warnings,
 
     meta: {
-      V_stall_target:       V_STALL_TARGET,
+      V_launch_max:         V_LAUNCH_MAX,
       maxCombinedSpan_m:    MAX_COMBINED_SPAN_M,
       maxCombinedSpan_ft:   15,
       combFactor,
       maxSpanThis_m:        r(maxSpanThis, 3),
-      AR_target:            AR_WING,
+      AR_opt:               r(AR_opt, 2),
       V_ht_target:          V_HT_TARGET,
       V_vt_target:          V_VT_TARGET,
       SM_target_pct:        STATIC_MARGIN_TARGET * 100,
@@ -544,9 +597,9 @@ export function computeFullReport(airfoilId, wingConfigId, tailId, wingspanM) {
       }] : []),
       {
         group: 'Wing Sizing from Span',
-        name:  'Wing Area from AR Target',
-        formula: 'S = b² / AR',
-        calc: `${r(b,4)}² / ${AR_WING}`,
+        name:  'Wing Area (payload-optimised AR)',
+        formula: 'S = b² / AR_opt',
+        calc: `${r(b,4)}² / ${r(AR_opt,2)}  (swept ${AR_OPT_MIN}–${AR_OPT_MAX}, best payload at AR ${r(AR_opt,2)})`,
         result: `${r(S,4)} m²`,
       },
       {
@@ -580,9 +633,9 @@ export function computeFullReport(airfoilId, wingConfigId, tailId, wingspanM) {
       // ── Payload capacity ──────────────────────────────────────────────────
       {
         group: 'Payload Capacity',
-        name:  'Max Gross Mass at Stall',
-        formula: 'm_max = ½ ρ CL_max_eff V_stall_target² S / g',
-        calc: `0.5 × ${RHO} × ${r(CL_max_eff,4)} × ${V_STALL_TARGET}² × ${r(S,4)} / ${G}`,
+        name:  'Max Gross Mass (sized to launch limit)',
+        formula: 'm_max = ½ ρ CL_max_eff V_launch_max² S / g',
+        calc: `0.5 × ${RHO} × ${r(CL_max_eff,4)} × ${V_LAUNCH_MAX}² × ${r(S,4)} / ${G}`,
         result: `${r(m_max,4)} kg`,
       },
       {
@@ -637,10 +690,17 @@ export function computeFullReport(airfoilId, wingConfigId, tailId, wingspanM) {
       // ── Aerodynamics ──────────────────────────────────────────────────────
       {
         group: 'Aerodynamic Performance',
-        name:  'Stall Speed',
-        formula: 'V_s = √(2W / (ρ S CL_max_eff))',
+        name:  'Stall Speed (max payload)',
+        formula: 'V_s = √(2W_total / (ρ S CL_max_eff))',
         calc: `√(2 × ${r(W_total,3)} / (${RHO} × ${r(S,4)} × ${r(CL_max_eff,4)}))`,
         result: `${r(V_stall,4)} m/s`,
+      },
+      {
+        group: 'Aerodynamic Performance',
+        name:  'Stall Speed (empty, no payload)',
+        formula: 'V_s_empty = √(2 m_empty g / (ρ S CL_max_eff))',
+        calc: `√(2 × ${r(m_empty,4)} × ${G} / (${RHO} × ${r(S,4)} × ${r(CL_max_eff,4)}))`,
+        result: `${r(V_stall_empty,4)} m/s`,
       },
       {
         group: 'Aerodynamic Performance',

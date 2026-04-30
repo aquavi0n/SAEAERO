@@ -66,6 +66,42 @@ export const MATERIALS = [
     costScore: 2,
     note: 'Good for fuselage bulkheads and ribs. Too heavy for large wing skin panels.',
   },
+  {
+    id: 'PRINT_LW_PLA',
+    name: 'LW-PLA (Lightweight Foamed)',
+    densityKgM2: 0.072,
+    structuralScore: 7,
+    buildDifficulty: 'medium',
+    costScore: 3,
+    note: 'Foaming PLA expands ~2× at 230°C+, giving ~0.6 g/cm³ effective density. Lightest printable structural option. Print at 0.2mm layers, 10% gyroid infill, 2 walls. Best for ribs, formers, and skin panels up to 3 m span.',
+  },
+  {
+    id: 'PRINT_CF_PLA',
+    name: 'CF-PLA (Carbon Fiber Filled)',
+    densityKgM2: 0.095,
+    structuralScore: 9,
+    buildDifficulty: 'medium',
+    costScore: 4,
+    note: 'Chopped CF reinforcement gives ~3× stiffer than PLA at similar weight. Requires hardened steel nozzle ≥ 0.4 mm — standard brass wears fast. Best for large-span spar channels, motor mounts, and wing cores > 3 m.',
+  },
+  {
+    id: 'PRINT_ASA',
+    name: 'ASA (UV-Stable)',
+    densityKgM2: 0.108,
+    structuralScore: 7,
+    buildDifficulty: 'medium',
+    costScore: 3,
+    note: 'UV and weather resistant — survives outdoor competition without yellowing or embrittling. Needs enclosure and ~100°C bed. Print at 245°C, 0.2 mm layers, 15% infill. Good for fuselage, tail surfaces, and any sun-exposed structure.',
+  },
+  {
+    id: 'PRINT_PETG',
+    name: 'PETG (Standard)',
+    densityKgM2: 0.130,
+    structuralScore: 6,
+    buildDifficulty: 'easy',
+    costScore: 2,
+    note: 'Easiest filament to print reliably — no warping, no enclosure needed. Tough and crack-resistant. Heavier than LW-PLA but very forgiving for first prints. Use for cargo bays, fuselage, motor nacelles, and non-structural panels.',
+  },
 ];
 
 export function getMaterialById(id) {

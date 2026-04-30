@@ -132,7 +132,7 @@ export default function ResultsDisplay({ results: r, onBack }) {
         <Row label="Mean Aerodynamic Chord (MAC)" value={r.wing.chord_m} unit="m" bold
           info="Average front-to-back depth of the wing. Most stability calculations use this as the reference length." />
         <Row label="Aspect Ratio (AR)" value={r.wing.AR} bold
-          info="Wingspan squared divided by wing area. High AR = efficient and glider-like. 7 is a good SAE compromise." />
+          info="Wingspan squared divided by wing area. This is the payload-optimised AR — lower AR = more wing area = more lift capacity for the given span." />
         <Row label="Taper Ratio" value={r.wing.taperRatio}
           info="How much the wing narrows from root to tip. 1.0 means it stays the same width all the way — easiest to build." />
         <Row label="Wing Loading" value={`${r.wing.WL_Nm2} N/m²  (${r.wing.WL_kgm2} kg/m²)`}
@@ -238,8 +238,10 @@ export default function ResultsDisplay({ results: r, onBack }) {
 
       {/* ── AERODYNAMIC PERFORMANCE ────────────────────────────────────── */}
       <Section title="Aerodynamic Performance">
-        <Row label="Stall Speed (V_s)" value={r.aero.V_stall_ms} unit="m/s" bold
-          info="Minimum safe flying speed. Below this the wing produces so little lift that the plane drops. This is the most important number to respect." />
+        <Row label="Stall Speed — max payload (V_s)" value={r.aero.V_stall_ms} unit="m/s" bold
+          info="Minimum safe flying speed at full payload. Below this the wing produces too little lift. Near V_launch_max by design — the wing is sized to use the full SAE hand-launch ceiling." />
+        <Row label="Stall Speed — empty (no payload)" value={r.aero.V_stall_empty_ms} unit="m/s" bold
+          info="Stall speed when flying with no cargo. This is the true minimum stall speed this wing can achieve. Lower AR (wider wing) directly reduces this." />
         <Row label="Best L/D Speed" value={r.aero.V_bestLD_ms} unit="m/s" bold
           info="The speed where you get the most lift for the least drag — the sweet spot. Fly here for maximum range and endurance." />
         <Row label="Recommended Cruise Speed" value={r.aero.V_cruise_ms} unit="m/s"
@@ -464,19 +466,47 @@ export default function ResultsDisplay({ results: r, onBack }) {
 
       {/* ── MATERIALS ──────────────────────────────────────────────────── */}
       <Section title="Material Recommendations">
-        <Row label="Primary Recommendation" value={r.materials.rec.name} bold
-          info="The best material for this aircraft's size and payload based on span, area, and structural requirements." />
+        <Sub title="Best 3D printed filament for this design" />
+        <Row label="Selected Filament" value={r.materials.rec.name} bold
+          info="Algorithmically selected: lightest 3D printed filament that meets the structural score threshold for this span and payload. Re-evaluated every calculation." />
         <Note text={r.materials.rec.note} />
-        <Row label="Alternative" value={r.materials.alt.name}
-          info="Second choice if the primary is unavailable or over budget." />
+        <Row label="Runner-up Filament" value={r.materials.alt.name}
+          info="Next best filament — use if the primary is out of stock or your printer struggles with it." />
         <Note text={r.materials.alt.note} />
 
-        <Sub title="Weight comparison (wing + tail surfaces)" />
+        <Sub title="3D printed filament comparison" />
+        <div className="overflow-x-auto mt-1 mb-3">
+          <table className="text-xs font-mono w-full min-w-max">
+            <thead>
+              <tr className="border-b border-gray-800 text-gray-600">
+                <th className="text-left py-1 pr-4 font-normal w-52">Filament</th>
+                <th className="text-right py-1 pr-3 font-normal">Struct kg/m²</th>
+                <th className="text-right py-1 pr-3 font-normal">Score</th>
+                <th className="text-right py-1 pr-3 font-normal">Meets req?</th>
+                <th className="text-right py-1 font-normal">Wing+Tail kg</th>
+              </tr>
+            </thead>
+            <tbody>
+              {r.materials.printComparison.map(m => (
+                <tr key={m.id} className={m.id === r.materials.rec.id ? 'font-bold text-blue-400' : m.meetsReq ? 'text-gray-400' : 'text-gray-600'}>
+                  <td className="py-0.5 pr-4">{m.name}{m.id === r.materials.rec.id && ' ✓'}</td>
+                  <td className="text-right pr-3">{m.density}</td>
+                  <td className="text-right pr-3">{m.score}/10</td>
+                  <td className="text-right pr-3">{m.meetsReq ? 'yes' : 'no*'}</td>
+                  <td className="text-right">{m.mStruct} kg</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <p className="text-xs text-gray-600 mt-1">* structural score below threshold for this span — usable but not recommended  ·  req. score: {r.materials.minStructScore}/10</p>
+        </div>
+
+        <Sub title="Full material comparison (wing + tail weight)" />
         <div className="overflow-x-auto mt-1">
           <table className="text-xs font-mono w-full min-w-max">
             <thead>
               <tr className="border-b border-gray-800 text-gray-600">
-                <th className="text-left py-1 pr-4 font-normal w-44">Material</th>
+                <th className="text-left py-1 pr-4 font-normal w-52">Material</th>
                 <th className="text-right py-1 pr-3 font-normal">Wing</th>
                 <th className="text-right py-1 pr-3 font-normal">Tail</th>
                 <th className="text-right py-1 pr-3 font-normal">Structural</th>
@@ -485,8 +515,15 @@ export default function ResultsDisplay({ results: r, onBack }) {
             </thead>
             <tbody>
               {r.materials.comparison.map(m => (
-                <tr key={m.id} className={m.id === r.materials.rec.id ? 'font-bold text-blue-400' : 'text-gray-500'}>
-                  <td className="py-0.5 pr-4">{m.name}{m.id === r.materials.rec.id && ' ✓'}</td>
+                <tr key={m.id} className={
+                  m.id === r.materials.rec.id ? 'font-bold text-blue-400' :
+                  m.isPrint ? 'text-gray-400' : 'text-gray-600'
+                }>
+                  <td className="py-0.5 pr-4">
+                    {m.name}
+                    {m.id === r.materials.rec.id && ' ✓'}
+                    {m.isPrint && m.id !== r.materials.rec.id && <span className="text-gray-600"> (print)</span>}
+                  </td>
                   <td className="text-right pr-3">{m.mWing} kg</td>
                   <td className="text-right pr-3">{m.mTail} kg</td>
                   <td className="text-right pr-3">{m.mStruct} kg</td>
@@ -495,7 +532,7 @@ export default function ResultsDisplay({ results: r, onBack }) {
               ))}
             </tbody>
           </table>
-          <p className="text-xs text-gray-600 mt-1">Wing = wing skin+ribs · Tail = H-tail+V-tail · GTOW = total aircraft weight with that material</p>
+          <p className="text-xs text-gray-600 mt-1">Wing = skin+ribs · Tail = H-tail+V-tail · GTOW = total aircraft weight with that material</p>
         </div>
       </Section>
 
@@ -560,7 +597,7 @@ export default function ResultsDisplay({ results: r, onBack }) {
       )}
 
       <p className="text-xs text-gray-700 mt-4 mb-8 border-t border-gray-800 pt-3">
-        Stall target {r.meta.V_stall_target} m/s · AR {r.meta.AR_target} ·
+        Launch limit {r.meta.V_launch_max} m/s · AR (opt) {r.meta.AR_opt} ·
         V_ht {r.meta.V_ht_target} · V_vt {r.meta.V_vt_target} ·
         SM {r.meta.SM_target_pct}% MAC · Combined span limit {r.meta.maxCombinedSpan_ft} ft ({r.meta.maxCombinedSpan_m} m)
       </p>
